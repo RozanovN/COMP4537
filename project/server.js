@@ -666,7 +666,6 @@ http.createServer(function (req, res) {
             handleDocs(req, res);
         } else if (req.url === '/COMP4537/project/api/v1/swagger.json') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            console.log(JSON.stringify(openapiSpecification, null, 2));
             res.end(JSON.stringify(openapiSpecification, null, 2));
         }
     });
