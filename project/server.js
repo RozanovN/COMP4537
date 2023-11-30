@@ -152,14 +152,22 @@ function auth(data, res) {
             console.log(result[0].userid);
             updateConsumption(result[0].userid);
             token = jwt.sign({'userId': result[0].userid}, secretKey);
-            res.writeHead(200, { 
-                "Content-Type": "application/json",
-                'Set-Cookie': `${token}; HttpOnly;Max-Age=60`,
+            userCon.query(`SELECT calls_made FROM api_consumption WHERE userid = ? ;`, [result[0].userid], (error, result) => {
+                if (error) {
+                    console.error(error);
+                    res.writeHead(500, { "Content-Type": "application/json" });
+                    res.end(JSON.stringify({
+                        "error": strings.SERVER_ERROR,
+                    }));
+                } else if (result[0].role) {
+                    checkCallsLimitAndSendResponse({
+                        "message": strings.LOGIN_SUCCESS,
+                        "role": result[0].role,
+                        "calls_made": result[0].calls_made
+                    }, userId, res);
+                    updateConsumption(result[0].userid);
+                } 
             });
-            res.end(JSON.stringify({
-                "message": strings.LOGIN_SUCCESS,
-                "role": result[0].role
-            }));
         }
     });
 }
@@ -181,14 +189,14 @@ function handleLogin(req, res) {
                 console.log(decodedToken);
                 const userId = decodedToken.userId;
                 console.log(userId);
-                userCon.query(`SELECT * FROM user WHERE userid=${userId};` , (err, result) => {
+                userCon.query(`SELECT calls_made FROM api_consumption WHERE userid = ? ;`, [userId], (err, result) => {
                     if (!err && result[0].role) {
                         checkCallsLimitAndSendResponse({
                             "message": strings.LOGIN_SUCCESS,
-                            "role": result[0].role
+                            "role": result[0].role,
+                            "calls_made": result[0].calls_made
                         }, userId, res);
                         updateConsumption(userId);
-                        res.end(JSON.stringify());
                     } else {
                         console.error(err);
                         auth(data, res);
