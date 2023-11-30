@@ -65,6 +65,7 @@ const transporter = nodemailer.createTransport({
 
 const secretKey = 'ff178d0a07f7478883cf80b1d504873d9b25d416a1c553dd093d08c9785151aa';
 const passwordResetTokens = {};
+const API_CALLS_LIMIT = 20;
 
 function hash(originalStr) {
     return crypto.createHash('sha256').update(originalStr).digest('hex');
@@ -182,12 +183,12 @@ function handleLogin(req, res) {
                 console.log(userId);
                 userCon.query(`SELECT * FROM user WHERE userid=${userId};` , (err, result) => {
                     if (!err && result[0].role) {
-                        updateConsumption(userId);
-                        res.writeHead(200, { "Content-Type": "application/json" });
-                        res.end(JSON.stringify({
+                        checkCallsLimitAndSendResponse({
                             "message": strings.LOGIN_SUCCESS,
                             "role": result[0].role
-                        }));
+                        }, userId, res);
+                        updateConsumption(userId);
+                        res.end(JSON.stringify());
                     } else {
                         console.error(err);
                         auth(data, res);
@@ -337,16 +338,34 @@ function handleConsumption(req, res) {
     }
 }
 
-function makeAIRequest(res, imgUrl) {
+function checkCallsLimitAndSendResponse(response, userId, res) {
+    userCon.query('SELECT calls_made FROM api_consumption WHERE userid= ? ;', [userId], (err, result) => {
+        if (err) {
+            console.error(err)
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({
+                "error": strings.SERVER_ERROR,
+            }));
+        } else if (result[0]) {
+            if (result[0].calls_made > API_CALLS_LIMIT) {
+                response["warning"] = strings.FREE_CALLS_EXCEEDED + `: ${result[0].calls_made}/${API_CALLS_LIMIT}`;
+            }
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify(response));
+        }
+    });
+}
+
+function makeAIRequest(res, imgUrl, userId) {
     const apiUrl = 'https://73g2okhbm36yhna6lj2os56hl40qahqy.lambda-url.us-east-1.on.aws/'
     axios.post(apiUrl, {"url": imgUrl}, {"Content-type": "application/json", "Authorization": "vZJWqT2qaYaNOLACfsbju9MrSpnCHeTE9dxbMSqo"})
     .then(response => {
         console.log('Response:', response.data);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({
+        server_response = {
             "message": strings.CONVERSION_SUCCESS,
             "text": response.data
-        }));
+        }
+        checkCallsLimitAndSendResponse(server_response, userId, res);
     })
     .catch(error => {
         console.error('Error:', error.message);
@@ -386,8 +405,8 @@ function handleConvert(req, res) {
                             "error": strings.SERVER_ERROR,
                         }));
                     } else if (result[0]) {
+                        makeAIRequest(res, data.imgUrl, userId);
                         updateConsumption(userId);
-                        makeAIRequest(res, data.imgUrl);
                     } else {
                         res.writeHead(403, { "Content-Type": "application/json" });
                         res.end(JSON.stringify({
