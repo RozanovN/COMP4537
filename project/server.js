@@ -150,21 +150,24 @@ function auth(data, res) {
             }));
         } else {
             console.log(result[0].userid);
-            updateConsumption(result[0].userid);
             token = jwt.sign({'userId': result[0].userid}, secretKey);
-            userCon.query(`SELECT calls_made FROM api_consumption WHERE userid = ? ;`, [result[0].userid], (error, result) => {
+            userCon.query(`SELECT calls_made FROM api_consumption WHERE userid = ? ;`, [result[0].userid], (error, inner_result) => {
+                console.log(result[0]);
+                console.log(inner_result[0]);
                 if (error) {
                     console.error(error);
                     res.writeHead(500, { "Content-Type": "application/json" });
                     res.end(JSON.stringify({
                         "error": strings.SERVER_ERROR,
                     }));
-                } else if (result[0].role) {
+                    updateConsumption(result[0].userid);
+                } else if (result[0] && inner_result[0]) {
+                    
                     checkCallsLimitAndSendResponse({
                         "message": strings.LOGIN_SUCCESS,
                         "role": result[0].role,
-                        "calls_made": result[0].calls_made
-                    }, userId, res);
+                        "calls_made": inner_result[0].calls_made
+                    }, result[0].userid, res);
                     updateConsumption(result[0].userid);
                 } 
             });
@@ -360,6 +363,12 @@ function checkCallsLimitAndSendResponse(response, userId, res) {
             }
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify(response));
+        } else {
+            console.log("Shouldn't happen");
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({
+                "error": strings.SERVER_ERROR,
+            }));
         }
     });
 }
