@@ -15,5 +15,7 @@ module.exports = Object.freeze({
     "PASSWORD_RESET": 'Password reset email sent; check your inbox',
     "SERVER_ERROR": "Internal server error; try again later",
     "PASSWORD_RESET_SUCCESS": "Successfully updated the password",
-    "FREE_CALLS_EXCEEDED": "You exceeded your limit for free API calls"
+    "FREE_CALLS_EXCEEDED": "You exceeded your limit for free API calls",
+    "EMAIL_SUBJET": 'Password Reset',
+    "EMAIL_TEXT": "Click the following link to reset your password",
 });

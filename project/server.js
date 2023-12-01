@@ -98,6 +98,15 @@ function isMissingFields(fields, data, res) {
     return false;
 }
 
+function validateEmail() {
+    // written by ChatGPT
+    // Regular expression for basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    // Test the email against the regular expression
+    return emailRegex.test(email);
+}
+
 function handleRigestration(req, res) {
     let data = "";
     req.on("data", (chunk) => {
@@ -112,7 +121,8 @@ function handleRigestration(req, res) {
             return;
         }
         userCon.query(
-            `INSERT INTO user (username, email, password, role) VALUES ('${data.username}', '${data.email}', '${hash(data.password)}', 'user'); INSERT INTO api_consumption (calls_made, userid) VALUES (1, (SELECT LAST_INSERT_ID()));`, (err, result) => {
+            `INSERT INTO user (username, email, password, role) VALUES (?, ?, ?, 'user');
+             INSERT INTO api_consumption (calls_made, userid) VALUES (1, (SELECT LAST_INSERT_ID()));`, [data.username, data.email, hash(data.password)], (err, result) => {
             console.log(JSON.stringify(result));
             if (err) {
                 console.error(err);
@@ -135,7 +145,7 @@ function auth(data, res) {
     if (isMissingFields(['email', 'password'], data, res)) {
         return;
     }
-    userCon.query(`SELECT * FROM user WHERE email = '${data.email}'  AND password = '${hash(data.password)}';`, (err, result) => {
+    userCon.query(`SELECT * FROM user WHERE email = ? AND password =?;`, [data.email, hash(data.password)], (err, result) => {
         console.log(JSON.stringify(result));
         if (err) {
             console.error(err)
@@ -214,6 +224,21 @@ function handleLogin(req, res) {
     });
 }
 
+function writeToFile(filePath) {
+    const jsonData = JSON.stringify(stats, null, 4);
+    fs.writeFileSync(filePath, jsonData);
+    console.log(`Data has been written to ${filePath}`);
+}
+
+function loadStatsIfExist(filePath) {
+    try {
+        const jsonData = fs.readFileSync(filePath, 'utf-8');
+        stats = JSON.parse(jsonData);
+    } catch (error) {
+        writeToFile(filePath);
+    }
+}
+
 function handleStats(req, res) {
     stats["/COMP4537/project/api/v1/stats"].Requests += 1;
     const cookie = req.headers.cookie;
@@ -224,7 +249,7 @@ function handleStats(req, res) {
             console.log(decodedToken);
             const userId = decodedToken.userId;
             console.log(userId);
-            userCon.query(`SELECT * FROM user WHERE userid=${userId};` , (err, result) => {
+            userCon.query(`SELECT * FROM user WHERE userid = ? ;`, [userId], (err, result) => {
                 if (err) {
                     console.error(err)
                     res.writeHead(500, { "Content-Type": "application/json" });
@@ -276,7 +301,7 @@ function handleStats(req, res) {
 }
 
 function updateConsumption(userid) {
-    userCon.query(`UPDATE api_consumption SET calls_made = calls_made + 1 WHERE userid = ${userid};` , (err, result) => {
+    userCon.query(`UPDATE api_consumption SET calls_made = calls_made + 1 WHERE userid = ?;`, [userid], (err, result) => {
         if (err) {
             console.error(err);
         } else {
@@ -295,7 +320,7 @@ function handleConsumption(req, res) {
             console.log(decodedToken);
             const userId = decodedToken.userId;
             console.log(userId);
-            userCon.query(`SELECT * FROM user WHERE userid=${userId};` , (err, result) => {
+            userCon.query(`SELECT * FROM user WHERE userid= ?`, [userId], (err, result) => {
                 if (err) {
                     console.error(err)
                     res.writeHead(500, { "Content-Type": "application/json" });
@@ -364,7 +389,7 @@ function checkCallsLimitAndSendResponse(response, userId, res, token=null) {
                 "Content-Type": "application/json",
             }
             if (token) {
-                head['Set-Cookie'] = `${token}; HttpOnly;Max-Age=60` 
+                head['Set-Cookie'] = `${token}; HttpOnly; Max-Age=60; SameSite=None; Secure;` 
             }
             res.writeHead(200, head);
             res.end(JSON.stringify(response));
@@ -419,7 +444,7 @@ function handleConvert(req, res) {
                 console.log(decodedToken);
                 const userId = decodedToken.userId;
                 console.log(userId);
-                userCon.query(`SELECT * FROM user WHERE userid=${userId};` , (err, result) => {
+                userCon.query(`SELECT * FROM user WHERE userid = ? ;`, [userId], (err, result) => {
                     if (err) {
                         console.error(err)
                         res.writeHead(500, { "Content-Type": "application/json" });
@@ -473,7 +498,7 @@ function handleDelete(req, res) {
                 console.log(decodedToken);
                 const userId = decodedToken.userId;
                 console.log(userId);
-                userCon.query(`SELECT * FROM user WHERE userid=${userId};` , (err, result) => {
+                userCon.query(`SELECT * FROM user WHERE userid = ? ;`, [userId], (err, result) => {
                     if (err) {
                         console.error(err)
                         res.writeHead(500, { "Content-Type": "application/json" });
@@ -484,8 +509,8 @@ function handleDelete(req, res) {
                         if (result[0].role === 'admin') {
                             updateConsumption(userId);
                             // query written by chatGPT
-                            deleteCon.query(`DELETE  api_consumption FROM api_consumption WHERE userid = ${data.userid};
-                                                DELETE  user FROM user WHERE userid = ${data.userid};`, (error, deleteResult) => {
+                            deleteCon.query(`DELETE  api_consumption FROM api_consumption WHERE userid = ? ;
+                                                DELETE  user FROM user WHERE userid = ? ;`, [data.userid, data.userid], (error, deleteResult) => {
                                 if  (error) {
                                     console.error(error)
                                     res.writeHead(500, { "Content-Type": "application/json" });
@@ -541,7 +566,8 @@ function handleForgotPassword(req, res) {
         if (isMissingFields(['email', 'username'], data, res)) {
             return;
         }
-        userCon.query(`SELECT * FROM user WHERE email='${data.email}' AND username='${data.username}';` , (err, result) => {
+        stats["/COMP4537/project/api/v1/forgot_password"].Requests += 1;
+        userCon.query(`SELECT * FROM user WHERE email = ? AND username = ? ;`, [data.email, data.username] , (err, result) => {
             if (err) {
                 console.error(err)
                 res.writeHead(500, { "Content-Type": "application/json" });
@@ -551,12 +577,12 @@ function handleForgotPassword(req, res) {
             } else if (result[0]) {
                 const token = jwt.sign({'email':  data.email, 'id': result[0].userid}, secretKey);
                 passwordResetTokens[data.email] = token;
-                const resetLink = `https://master--jocular-rugelach-660235.netlify.app/reset_password?token=${token}`;
+                const resetLink = `https://master--jocular-rugelach-660235.netlify.app/reset_password/?token=${token}`;
                 const mailOptions = {
                     from: 'reset_password@nrsoftarch4537.com',
                     to: data.email,
-                    subject: 'Password Reset',
-                    text: `Click the following link to reset your password: ${resetLink}`
+                    subject: strings.EMAIL_SUBJET,
+                    text: strings.EMAIL_TEXT + `: ${resetLink}`
                 };
                 transporter.sendMail(mailOptions, (error, info) => {
                     res.setHeader('Content-Type', 'application/json');
@@ -589,6 +615,7 @@ function handleResetPassword(req, res) {
         }
     });
     req.on("end", () => {
+        stats["/COMP4537/project/api/v1/reset_password"].Requests += 1;
         data = JSON.parse(data);
         if (isMissingFields(['password', 'token'], data, res)) {
             return;
@@ -603,7 +630,7 @@ function handleResetPassword(req, res) {
             console.log(decodedToken);
             const userId = decodedToken.id;
             console.log(userId);
-            userCon.query(`UPDATE user SET password = '${hash(data.password)}' WHERE userid = ${userId};` , (err, result) => {
+            userCon.query(`UPDATE user SET password = ? WHERE userid = ? ;`, [hash(data.password), userId] , (err, result) => {
                 if (err) {
                     console.error(err);
                     res.writeHead(500, { "Content-Type": "application/json" });
@@ -629,12 +656,15 @@ function handleDocs(req, res) {
 
 http.createServer(function (req, res) {
     res.setHeader("Access-Control-Allow-Origin", "https://master--jocular-rugelach-660235.netlify.app");
+    res.setHeader('Access-Control-Allow-Credentials', true);
+    res.setHeader('Access-Control-Allow-Headers', "Content-Type")
     res.setHeader('Access-Control-Allow-Methods', 'GET, PATCH, DELETE, POST, OPTIONS');
-    userCon = mysql.createConnection(user);
-    deleteCon = mysql.createConnection(delete_user);
     if (req.method === "OPTIONS") {
         res.end();  
     }
+    userCon = mysql.createConnection(user);
+    deleteCon = mysql.createConnection(delete_user);
+    loadStatsIfExist("./stats.json");
 
     console.log(req.url);
     userCon.connect(function (err) {
@@ -682,8 +712,8 @@ http.createServer(function (req, res) {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(openapiSpecification, null, 2));
         }
+        writeToFile("./stats.json");
     });
-    
 }).listen();
 
 // ,pzW!x[$dQc~ test email password
