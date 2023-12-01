@@ -162,12 +162,11 @@ function auth(data, res) {
                     }));
                     updateConsumption(result[0].userid);
                 } else if (result[0] && inner_result[0]) {
-                    
                     checkCallsLimitAndSendResponse({
                         "message": strings.LOGIN_SUCCESS,
                         "role": result[0].role,
                         "calls_made": inner_result[0].calls_made
-                    }, result[0].userid, res);
+                    }, result[0].userid, res, token);
                     updateConsumption(result[0].userid);
                 } 
             });
@@ -349,7 +348,7 @@ function handleConsumption(req, res) {
     }
 }
 
-function checkCallsLimitAndSendResponse(response, userId, res) {
+function checkCallsLimitAndSendResponse(response, userId, res, token=null) {
     userCon.query('SELECT calls_made FROM api_consumption WHERE userid= ? ;', [userId], (err, result) => {
         if (err) {
             console.error(err)
@@ -361,7 +360,13 @@ function checkCallsLimitAndSendResponse(response, userId, res) {
             if (result[0].calls_made > API_CALLS_LIMIT) {
                 response["warning"] = strings.FREE_CALLS_EXCEEDED + `: ${result[0].calls_made}/${API_CALLS_LIMIT}`;
             }
-            res.writeHead(200, { "Content-Type": "application/json" });
+            head = { 
+                "Content-Type": "application/json",
+            }
+            if (token) {
+                head['Set-Cookie'] = `${token}; HttpOnly;Max-Age=60` 
+            }
+            res.writeHead(200, head);
             res.end(JSON.stringify(response));
         } else {
             console.log("Shouldn't happen");
