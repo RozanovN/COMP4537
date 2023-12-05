@@ -201,7 +201,8 @@ function handleLogin(req, res) {
                 console.log(decodedToken);
                 const userId = decodedToken.userId;
                 console.log(userId);
-                userCon.query(`SELECT calls_made FROM api_consumption WHERE userid = ? ;`, [userId], (err, result) => {
+                userCon.query(`SELECT u.role, ac.calls_made AS calls_made FROM user u LEFT JOIN api_consumption ac ON u.userid = ac.userid; ? ;`, [userId], (err, result) => {
+                    console.log(result);
                     if (!err && result[0].role) {
                         checkCallsLimitAndSendResponse({
                             "message": strings.LOGIN_SUCCESS,
@@ -405,8 +406,9 @@ function checkCallsLimitAndSendResponse(response, userId, res, token=null) {
 
 function makeAIRequest(res, imgUrl, userId) {
     const apiUrl = 'https://73g2okhbm36yhna6lj2os56hl40qahqy.lambda-url.us-east-1.on.aws/'
-    axios.post(apiUrl, {"url": imgUrl}, {"Content-type": "application/json", "Authorization": "vZJWqT2qaYaNOLACfsbju9MrSpnCHeTE9dxbMSqo"})
+    axios.post(apiUrl, {"url": imgUrl}, {headers: {"Content-type": "application/json", "Authorization": "vZJWqT2qaYaNOLACfsbju9MrSpnCHeTE9dxbMSqo"}})
     .then(response => {
+        console.log(response);
         console.log('Response:', response.data);
         server_response = {
             "message": strings.CONVERSION_SUCCESS,
@@ -576,7 +578,7 @@ function handleForgotPassword(req, res) {
                 }));
             } else if (result[0]) {
                 const token = jwt.sign({'email':  data.email, 'id': result[0].userid}, secretKey);
-                passwordResetTokens[data.email] = token;
+                passwordResetTokens[result[0].userid] = token;
                 const resetLink = `https://master--jocular-rugelach-660235.netlify.app/reset_password/?token=${token}`;
                 const mailOptions = {
                     from: 'reset_password@nrsoftarch4537.com',
@@ -620,28 +622,33 @@ function handleResetPassword(req, res) {
         if (isMissingFields(['password', 'token'], data, res)) {
             return;
         }
-        const token = data.token;
-        const storedToken = passwordResetTokens[data.email];
-        if (!storedToken && storedToken === token) {
-            res.writeHead(500, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: 'Invalid token' }));
-        } else {
-            const decodedToken = jwt.verify(token, secretKey);
+        try {
+            const decodedToken = jwt.verify(data.token, secretKey);
             console.log(decodedToken);
-            const userId = decodedToken.id;
-            console.log(userId);
-            userCon.query(`UPDATE user SET password = ? WHERE userid = ? ;`, [hash(data.password), userId] , (err, result) => {
-                if (err) {
-                    console.error(err);
-                    res.writeHead(500, { "Content-Type": "application/json" });
-                    res.end(JSON.stringify({ error: strings.SERVER_ERROR }));
-                } else {
-                    res.writeHead(200, { "Content-Type": "application/json" });
-                    res.end(JSON.stringify({
-                        "message": strings.PASSWORD_RESET_SUCCESS,
-                    }));
-                }
-            });
+            const storedToken = passwordResetTokens[decodedToken.id];
+            if (!storedToken || storedToken === token) {
+                res.writeHead(500, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: 'Invalid token' }));
+            } else {
+                const userId = decodedToken.id;
+                console.log(userId);
+                userCon.query(`UPDATE user SET password = ? WHERE userid = ? ;`, [hash(data.password), userId] , (err, result) => {
+                    if (err) {
+                        console.error(err);
+                        res.writeHead(500, { "Content-Type": "application/json" });
+                        res.end(JSON.stringify({ error: strings.SERVER_ERROR }));
+                    } else {
+                        res.writeHead(200, { "Content-Type": "application/json" });
+                        res.end(JSON.stringify({
+                            "message": strings.PASSWORD_RESET_SUCCESS,
+                        }));
+                    }
+                });
+            }
+        } catch (error) {
+            console.error(err);
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: strings.SERVER_ERROR }));
         }
     });
 }
