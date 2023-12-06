@@ -201,7 +201,7 @@ function handleLogin(req, res) {
                 console.log(decodedToken);
                 const userId = decodedToken.userId;
                 console.log(userId);
-                userCon.query(`SELECT u.role, ac.calls_made AS calls_made FROM user u LEFT JOIN api_consumption ac ON u.userid = ac.userid; ? ;`, [userId], (err, result) => {
+                userCon.query(`SELECT u.role, ac.calls_made AS calls_made FROM user u LEFT JOIN api_consumption ac ON u.userid = ac.userid WHERE u.userid = ? ;`, [userId], (err, result) => {
                     console.log(result);
                     if (!err && result[0].role) {
                         checkCallsLimitAndSendResponse({
