@@ -390,7 +390,7 @@ function checkCallsLimitAndSendResponse(response, userId, res, token=null) {
                 "Content-Type": "application/json",
             }
             if (token) {
-                head['Set-Cookie'] = `${token}; HttpOnly; Max-Age=60; SameSite=None; Secure;` 
+                head['Set-Cookie'] = `${token}; HttpOnly; Max-Age=300; SameSite=None; Secure;` 
             }
             res.writeHead(200, head);
             res.end(JSON.stringify(response));
